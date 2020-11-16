@@ -1,24 +1,23 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { DownloadOutlined, SyncOutlined } from '@ant-design/icons';
 import {
   Breadcrumb,
   Button,
   Col,
   Layout,
-  Menu,
   Result,
   Row,
   Space,
   Table,
 } from 'antd';
-import { DownloadOutlined, SyncOutlined } from '@ant-design/icons';
-import { TableRowSelection } from 'antd/es/table/interface';
-import { useDashBoardState } from '../../../contexts/DashboardContext';
-import axios, { AxiosResponse } from 'axios';
-import useAsyncAxios from '../../../hooks/useAsyncAxios';
-import { execFileDownload } from '../../../api/download';
-import * as DEFINE from '../../../define';
-import { openNotification } from '../../../api/notification';
 import { ColumnsType } from 'antd/es/table';
+import { TableRowSelection } from 'antd/es/table/interface';
+import axios, { AxiosResponse } from 'axios';
+import React, { useEffect, useRef, useState } from 'react';
+import { execFileDownload } from '../../../api/download';
+import { openNotification } from '../../../api/notification';
+import { useDashBoardState } from '../../../contexts/DashboardContext';
+import * as DEFINE from '../../../define';
+import useAsyncAxios from '../../../hooks/useAsyncAxios';
 
 const { Content } = Layout;
 
@@ -39,7 +38,7 @@ export enum LogType {
   ESP_OTS_PROCESS = 'subsystem',
   ERROR_EXCEPTION = 'exception',
   TOMCAT = 'tomcat',
-  ETC = "etc"
+  ETC = 'etc',
 }
 
 export type CancelInfo = {
@@ -79,33 +78,6 @@ const logFilter = [
   },
 ];
 
-const columData: ColumnsType<LogFile> = [
-  {
-    title: 'File Type',
-    dataIndex: 'fileType',
-    key: 'fileType',
-    width: '35%',
-    filters: logFilter,
-    onFilter: (value: string | number | boolean, record: LogFile) =>
-      typeof value === 'string' && record.fileType.indexOf(value) === 0,
-    align: 'center',
-  },
-  {
-    title: 'File Name',
-    dataIndex: 'fileName',
-    key: 'fileName',
-    width: '50%',
-    align: 'center',
-  },
-  {
-    title: 'File Size',
-    dataIndex: 'fileSize',
-    key: 'fileSize',
-    width: '15%',
-    align: 'center',
-  },
-];
-
 // const loadFirstName: PromiseFn<any> = ({ userId }) =>
 //   fetch(`https://reqres.in/api/users/${userId}`)
 //     .then(res => (res.ok ? Promise.resolve(res) : Promise.reject(res)))
@@ -139,6 +111,8 @@ function LogTable(): JSX.Element {
     isDownloading: false,
   });
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [currentDataSource, setCurrentDataSource] = useState<LogFile[]>([]);
+  const [filteredValue, setFilteredValue] = useState<React.Key[]>([]);
 
   useEffect(() => {
     if (listState.error) {
@@ -173,15 +147,20 @@ function LogTable(): JSX.Element {
 
   useEffect(() => {
     if (selected) {
-      setCurrentPage(1);
-      setSelectedRowKeys([]);
-      listRefetch().then(r => r);
+      // setCurrentPage(1);
+      // setSelectedRowKeys([]);
+      // setCurrentDataSource([]);
+      // setFilteredValue([]);
+      // listRefetch().then(r => r);
+      onRefersh();
     }
   }, [selected]);
 
   const onRefersh = () => {
     setCurrentPage(1);
     setSelectedRowKeys([]);
+    setCurrentDataSource([]);
+    setFilteredValue([]);
     listRefetch().then(r => r);
   };
 
@@ -218,7 +197,11 @@ function LogTable(): JSX.Element {
     onSelectAll: (selected, selectedRows, changeRows) => {
       console.log('onSelectAll', selected, selectedRows, changeRows);
       if (selected) {
-        setSelectedRowKeys(fileList.map(item => item.key));
+        if (currentDataSource.length === 0) {
+          setSelectedRowKeys(fileList.map(item => item.key));
+        } else {
+          setSelectedRowKeys(currentDataSource.map(item => item.key));
+        }
       } else {
         setSelectedRowKeys([]);
       }
@@ -238,20 +221,50 @@ function LogTable(): JSX.Element {
   const onRow = (record: LogFile, rowIndex: number | undefined) => {
     return {
       onClick: (event: React.MouseEvent<HTMLElement, MouseEvent>) => {
-        if (rowIndex !== undefined) {
+        console.log('onRow/rowIndex', rowIndex);
+        console.log('onRow/record', record);
+        if (record.key !== undefined) {
           let newselectedRowKeys;
-          if (selectedRowKeys.find(item => item === rowIndex) !== undefined) {
+          if (selectedRowKeys.find(item => item === record.key) !== undefined) {
             newselectedRowKeys = selectedRowKeys.filter(
-              item => item !== rowIndex,
+              item => item !== record.key,
             );
           } else {
-            newselectedRowKeys = selectedRowKeys.concat(rowIndex);
+            newselectedRowKeys = selectedRowKeys.concat(record.key);
           }
           setSelectedRowKeys(newselectedRowKeys);
         }
       },
     };
   };
+
+  const columData: ColumnsType<LogFile> = [
+    {
+      title: 'File Type',
+      dataIndex: 'fileType',
+      key: 'fileType',
+      width: '35%',
+      filters: logFilter,
+      onFilter: (value: string | number | boolean, record: LogFile) =>
+        typeof value === 'string' && record.fileType.indexOf(value) === 0,
+      align: 'center',
+      filteredValue: filteredValue,
+    },
+    {
+      title: 'File Name',
+      dataIndex: 'fileName',
+      key: 'fileName',
+      width: '50%',
+      align: 'center',
+    },
+    {
+      title: 'File Size',
+      dataIndex: 'fileSize',
+      key: 'fileSize',
+      width: '15%',
+      align: 'center',
+    },
+  ];
 
   return (
     <Layout>
@@ -314,6 +327,26 @@ function LogTable(): JSX.Element {
                 onChange: (page, pageSize) => {
                   setCurrentPage(page);
                 },
+              }}
+              onChange={(
+                pagination,
+                filters,
+                sorter,
+                { currentDataSource, action },
+              ) => {
+                console.log('action', action);
+                if (action === 'filter') {
+                  console.log('filters', filters);
+                  console.log('currentDataSource', currentDataSource);
+                  if (!filters.fileType) {
+                    setCurrentDataSource([]);
+                    setFilteredValue([]);
+                  } else {
+                    setCurrentDataSource(currentDataSource);
+                    setFilteredValue(filters.fileType);
+                  }
+                  setSelectedRowKeys([]);
+                }
               }}
               loading={listState.loading}
               onRow={onRow}
